@@ -1,0 +1,15 @@
+.gradle/
+build/
+local.properties
+.idea/
+*.iml
+captures/
+.externalNativeBuild/
+.cxx/
+*.keystore
+*.jks
+
+# Don't commit user-supplied APK/OBB blobs that may be added to assets/ for bundling.
+# Keep .gitkeep so the directory still exists.
+app/src/main/assets/*.apk
+app/src/main/assets/*.obb

@@ -1,0 +1,3 @@
+# Drop your APK and OBB here to bundle them into the installer.
+# - <anything>.apk    -> auto-detected as the APK to install
+# - <anything>.obb    -> auto-detected as the OBB to copy (rename to main.<vc>.<pkg>.obb if needed)
