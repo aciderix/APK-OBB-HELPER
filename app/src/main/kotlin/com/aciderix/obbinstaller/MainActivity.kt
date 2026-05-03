@@ -1,6 +1,5 @@
 package com.aciderix.obbinstaller
 
-import android.app.Activity
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -17,6 +16,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -29,10 +29,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
-import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -49,16 +47,11 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
-
-    override fun onResume() {
-        super.onResume()
-    }
 }
 
-@OptIn(ExperimentalComposeUiApi::class, androidx.compose.material3.ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun InstallerScreen(vm: InstallerViewModel = viewModel()) {
-    val ctx = LocalContext.current
     val state by vm.state.collectAsState()
 
     val pickApk = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
@@ -67,20 +60,11 @@ fun InstallerScreen(vm: InstallerViewModel = viewModel()) {
     val pickObb = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         uri?.let { vm.setObbUri(it) }
     }
-    val pickObbDir = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
-        if (result.resultCode == Activity.RESULT_OK) {
-            result.data?.data?.let { vm.onObbDirGranted(it) }
-        }
-    }
     val unknownSourcesLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) {
         vm.refreshUnknownSourcesPermission()
     }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(title = { Text("OBB Installer") })
-        }
-    ) { padding ->
+    Scaffold(topBar = { TopAppBar(title = { Text("OBB Installer") }) }) { padding ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -110,7 +94,7 @@ fun InstallerScreen(vm: InstallerViewModel = viewModel()) {
             )
 
             SourceCard(
-                title = "OBB",
+                title = "OBB (optionnel)",
                 bundled = state.bundledObb,
                 current = state.obb?.displayName,
                 onPick = { pickObb.launch(arrayOf("application/octet-stream", "*/*")) }
@@ -127,24 +111,14 @@ fun InstallerScreen(vm: InstallerViewModel = viewModel()) {
                         Phase.Idle, Phase.Done, Phase.Error ->
                             if (state.obb == null) "Installer l'APK" else "Installer APK + OBB"
                         Phase.Staging -> "Préparation…"
+                        Phase.Patching -> "Patch + signature…"
                         Phase.InstallingApk -> "Installation…"
-                        Phase.AwaitingObbDir -> "Attente du dossier OBB"
                         Phase.CopyingObb -> "Copie OBB…"
                     }
                 )
             }
 
-            if (state.phase == Phase.AwaitingObbDir) {
-                Button(
-                    onClick = {
-                        val pkg = state.apkMeta?.packageName ?: return@Button
-                        pickObbDir.launch(ObbHelper.openObbPickerIntent(pkg))
-                    },
-                    modifier = Modifier.fillMaxWidth()
-                ) { Text("Choisir le dossier Android/obb/${state.apkMeta?.packageName.orEmpty()}") }
-            }
-
-            if (state.phase in setOf(Phase.Staging, Phase.InstallingApk, Phase.CopyingObb)) {
+            if (state.phase in setOf(Phase.Staging, Phase.Patching, Phase.InstallingApk, Phase.CopyingObb)) {
                 LinearProgressIndicator(
                     progress = { state.progress.coerceIn(0f, 1f) },
                     modifier = Modifier.fillMaxWidth()
@@ -165,11 +139,19 @@ fun InstallerScreen(vm: InstallerViewModel = viewModel()) {
             }
 
             Spacer(Modifier.height(12.dp))
-            Text(
-                "Astuce : si tu vois \"Choisir un autre dossier\", reste sur celui pré-sélectionné et appuie sur \"Utiliser ce dossier\".",
-                fontSize = 12.sp,
-                color = Color(0xFFAAAAAA)
-            )
+            Card(modifier = Modifier.fillMaxWidth()) {
+                Column(modifier = Modifier.padding(12.dp)) {
+                    Text("Comment ça marche", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                    Text(
+                        "L'app ré-écrit l'APK pour partager un UID Linux avec ce hub, ce qui lui " +
+                        "permet d'écrire dans Android/obb/<package> sans SAF, sans Shizuku, sans root. " +
+                        "Conséquence : la signature du jeu change, donc plus de mises à jour Play Store " +
+                        "et anti-cheat en ligne KO. Pour les jeux solo, c'est transparent.",
+                        fontSize = 12.sp,
+                        color = Color(0xFFAAAAAA)
+                    )
+                }
+            }
         }
     }
 }

@@ -15,8 +15,8 @@ import kotlinx.coroutines.launch
 enum class Phase {
     Idle,
     Staging,
+    Patching,
     InstallingApk,
-    AwaitingObbDir,
     CopyingObb,
     Done,
     Error
@@ -95,15 +95,28 @@ class InstallerViewModel(app: Application) : AndroidViewModel(app) {
                 val meta = ApkInstaller.stageAndReadMeta(ctx, apk) { p ->
                     _state.update { it.copy(progress = p) }
                 }
+                _state.update { it.copy(apkMeta = meta) }
+
                 _state.update {
                     it.copy(
-                        apkMeta = meta,
+                        phase = Phase.Patching,
+                        progress = 0f,
+                        statusText = "Patch + signature de ${meta.packageName}…"
+                    )
+                }
+                val patched = ApkResigner.patchAndResign(ctx, meta.cacheFile) { p ->
+                    _state.update { it.copy(progress = p) }
+                }
+                val patchedMeta = meta.copy(cacheFile = patched)
+
+                _state.update {
+                    it.copy(
                         phase = Phase.InstallingApk,
                         progress = 0f,
                         statusText = "Installation de ${meta.packageName} (v${meta.versionName})…"
                     )
                 }
-                val result = ApkInstaller.install(ctx, meta) { p ->
+                val result = ApkInstaller.install(ctx, patchedMeta) { p ->
                     _state.update { it.copy(progress = p) }
                 }
                 when (result) {
@@ -111,44 +124,37 @@ class InstallerViewModel(app: Application) : AndroidViewModel(app) {
                         if (s.obb != null) {
                             _state.update {
                                 it.copy(
-                                    phase = Phase.AwaitingObbDir,
-                                    statusText = "APK installée. Choisis le dossier OBB (un tap sur Utiliser ce dossier)."
+                                    phase = Phase.CopyingObb,
+                                    progress = 0f,
+                                    statusText = "Copie de l'OBB dans Android/obb/${meta.packageName}…"
                                 )
+                            }
+                            val filename = s.obb.displayName.ifBlank { "main.${meta.versionCode}.${meta.packageName}.obb" }
+                            val r = ObbCopier.copy(ctx, s.obb, meta.packageName, filename) { p ->
+                                _state.update { it.copy(progress = p) }
+                            }
+                            if (r.isSuccess) {
+                                _state.update { it.copy(phase = Phase.Done, statusText = "Terminé. Lance le jeu.") }
+                            } else {
+                                _state.update {
+                                    it.copy(phase = Phase.Error,
+                                        errorText = "Échec copie OBB : ${r.exceptionOrNull()?.message}")
+                                }
                             }
                         } else {
                             _state.update { it.copy(phase = Phase.Done, statusText = "APK installée.") }
                         }
                     }
                     is InstallResult.Failure -> {
-                        _state.update { it.copy(phase = Phase.Error, errorText = "Échec installation APK : ${result.message}") }
+                        val hint = if (result.message.contains("INCOMPATIBLE", ignoreCase = true) ||
+                                       result.message.contains("conflict", ignoreCase = true)) {
+                            "\n→ Désinstalle d'abord toute version existante du jeu (Play Store ou autre) et réessaie."
+                        } else ""
+                        _state.update { it.copy(phase = Phase.Error, errorText = "Échec installation : ${result.message}$hint") }
                     }
                 }
             } catch (t: Throwable) {
                 _state.update { it.copy(phase = Phase.Error, errorText = t.message ?: "erreur inconnue") }
-            }
-        }
-    }
-
-    fun onObbDirGranted(treeUri: Uri) {
-        val ctx = getApplication<Application>()
-        ObbHelper.persistPermission(ctx, treeUri)
-        val obbSource = _state.value.obb ?: return
-        val meta = _state.value.apkMeta ?: return
-        viewModelScope.launch {
-            _state.update { it.copy(phase = Phase.CopyingObb, progress = 0f, statusText = "Copie de l'OBB…") }
-            val destDir = ObbHelper.resolveTargetDir(ctx, treeUri, meta.packageName)
-            if (destDir == null) {
-                _state.update { it.copy(phase = Phase.Error, errorText = "Dossier OBB introuvable. Réessaie.") }
-                return@launch
-            }
-            val filename = obbSource.displayName.ifBlank { "main.${meta.versionCode}.${meta.packageName}.obb" }
-            val r = ObbHelper.copyObb(ctx, obbSource, destDir, filename) { p ->
-                _state.update { it.copy(progress = p) }
-            }
-            if (r.isSuccess) {
-                _state.update { it.copy(phase = Phase.Done, statusText = "Terminé. Lance le jeu.") }
-            } else {
-                _state.update { it.copy(phase = Phase.Error, errorText = "Échec copie OBB : ${r.exceptionOrNull()?.message}") }
             }
         }
     }
