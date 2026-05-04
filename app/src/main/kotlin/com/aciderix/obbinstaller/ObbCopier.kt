@@ -56,30 +56,31 @@ object ObbCopier {
         val pm = context.packageManager
         val ourUid = context.applicationInfo.uid
 
-        // Step 1: confirm the game is installed and shares our UID
-        val gameInfo = try {
-            pm.getApplicationInfo(targetPackage, 0)
-        } catch (e: Exception) {
-            throw IOException("Le jeu $targetPackage n'est pas installé : ${e.message}")
-        }
-        if (gameInfo.uid != ourUid) {
-            throw IOException(
-                "sharedUserId n'a pas pris effet : hub UID=$ourUid, jeu UID=${gameInfo.uid}. " +
-                "Cause probable : HyperOS/MIUI ignore sharedUserId, ou une ancienne version " +
-                "du jeu avec une autre signature traîne. Désinstalle complètement le jeu " +
-                "(paramètres > applis > $targetPackage > désinstaller) puis relance le hub."
-            )
-        }
-
-        // Step 2: wait for PackageManager / MediaProvider caches to include the new package
+        // Poll until the package list for our UID includes the freshly-installed game.
+        // - If sharedUserId took effect, the game shares our UID and lands in this list.
+        // - If not, it never appears here, and we raise a clear "UID share failed" error.
+        // getPackagesForUid for our own UID never needs QUERY_ALL_PACKAGES.
+        var found = false
+        var lastList = ""
         repeat(20) { i ->
             val pkgsForOurUid = pm.getPackagesForUid(ourUid) ?: emptyArray()
-            if (targetPackage in pkgsForOurUid) return@repeat
-            if (i == 19) throw IOException(
-                "PackageManager ne lie toujours pas $targetPackage à notre UID après 10s. " +
-                "Notre UID = $ourUid, packages = ${pkgsForOurUid.joinToString()}"
-            )
+            lastList = pkgsForOurUid.joinToString()
+            if (targetPackage in pkgsForOurUid) { found = true; return@repeat }
             delay(500)
+        }
+        if (!found) {
+            // Probe whether the game is installed at all (uses QUERY_ALL_PACKAGES).
+            val gameUid = try {
+                pm.getApplicationInfo(targetPackage, 0).uid
+            } catch (e: Exception) {
+                -1
+            }
+            throw IOException(
+                "sharedUserId n'a pas pris effet : hub UID=$ourUid, jeu UID=$gameUid. " +
+                "Packages partageant notre UID : [$lastList]. " +
+                "Cause probable : HyperOS/MIUI ignore android:sharedUserId. " +
+                "Si le jeu UID est -1, vérifie qu'il est bien installé."
+            )
         }
 
         // Step 3: try the official path via the game's PackageContext (works because same UID)
