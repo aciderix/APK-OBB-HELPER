@@ -8,7 +8,7 @@
 [![Jetpack Compose](https://img.shields.io/badge/Jetpack-Compose-4285F4?logo=jetpackcompose&logoColor=white)](https://developer.android.com/jetpack/compose)
 [![No Root](https://img.shields.io/badge/Root-Not%20Required-brightgreen)](#)
 [![No Shizuku](https://img.shields.io/badge/Shizuku-Not%20Required-brightgreen)](#)
-[![Latest Release](https://img.shields.io/github/v/release/aciderix/Claude-code-com?label=Latest&color=ff6600)](https://github.com/aciderix/Claude-code-com/releases/latest)
+[![Latest Release](https://img.shields.io/github/v/release/aciderix/APK-OBB-HELPER?label=Latest&color=ff6600)](https://github.com/aciderix/APK-OBB-HELPER/releases/latest)
 
 ---
 
@@ -85,7 +85,7 @@ them, by making the game its own delivery mechanism.
 ### 📥 1. Get the APK
 
 Download the latest **`ObbInstaller-vX.Y.Z.apk`** from the
-[**Releases page**](https://github.com/aciderix/Claude-code-com/releases/latest).
+[**Releases page**](https://github.com/aciderix/APK-OBB-HELPER/releases/latest).
 
 ### 🔓 2. Allow installs from unknown sources
 
@@ -193,8 +193,8 @@ java --version    # JDK 17+
 ### Build
 
 ```bash
-git clone https://github.com/aciderix/Claude-code-com.git
-cd Claude-code-com
+git clone https://github.com/aciderix/APK-OBB-HELPER.git
+cd APK-OBB-HELPER
 
 # Use any Gradle 8.9+ on PATH (Android Studio bundles one), or:
 gradle :app:assembleDebug
@@ -230,7 +230,7 @@ Output: `app/build/outputs/apk/debug/app-debug.apk`
 This app cannot be published on Google Play (Play policy forbids re-signing
 third-party packages). It is distributed via:
 
-- 🐙 **[GitHub Releases](https://github.com/aciderix/Claude-code-com/releases)** — primary channel
+- 🐙 **[GitHub Releases](https://github.com/aciderix/APK-OBB-HELPER/releases)** — primary channel
 - 📦 **F-Droid** — *coming soon (open source, MIT)*
 - 📦 **Aptoide / APKPure** — *coming soon*
 
@@ -359,7 +359,7 @@ où Android autorise toujours l'écriture dans le dossier OBB.
 ## ⚡ Démarrage rapide
 
 1. Télécharge le dernier **`ObbInstaller-vX.Y.Z.apk`** depuis la
-   [**page Releases**](https://github.com/aciderix/Claude-code-com/releases/latest).
+   [**page Releases**](https://github.com/aciderix/APK-OBB-HELPER/releases/latest).
 2. Autorise l'install d'apps inconnues (l'app te guide en deux taps).
 3. Choisis l'APK du jeu, choisis l'OBB, tape **Installer APK + OBB**, valide
    le prompt système. Le premier lancement du jeu déballe l'OBB
@@ -401,7 +401,7 @@ OBB là où il l'attend, c'est plié.
 Cette app ne peut pas être sur le Play Store (la politique Google interdit
 le re-signing de packages tiers). Elle est distribuée via :
 
-- 🐙 **[GitHub Releases](https://github.com/aciderix/Claude-code-com/releases)** — canal principal
+- 🐙 **[GitHub Releases](https://github.com/aciderix/APK-OBB-HELPER/releases)** — canal principal
 - 📦 **F-Droid** — *bientôt (open source, MIT)*
 - 📦 **Aptoide / APKPure** — *bientôt*
 
