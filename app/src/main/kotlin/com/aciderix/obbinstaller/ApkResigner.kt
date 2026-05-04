@@ -119,8 +119,11 @@ object ApkResigner {
                     if (name == "AndroidManifest.xml") {
                         val original = zip.getInputStream(e).use { it.readBytes() }
                         val authority = "$gamePackage$BOOTSTRAP_AUTHORITY_SUFFIX"
+                        // Android 14+ refuses targetSdk < 24 (sometimes higher).
+                        // Bump the manifest first, then add our provider.
+                        val bumped = ManifestPatcher.bumpTargetSdk(original, 24)
                         val patched = ManifestPatcher.addBootstrapProvider(
-                            originalManifest = original,
+                            originalManifest = bumped,
                             providerClass = BOOTSTRAP_PROVIDER_CLASS,
                             authority = authority
                         )

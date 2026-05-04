@@ -5,6 +5,7 @@ object ManifestPatcher {
     private const val ATTR_ID_NAME: Long = 0x01010003L
     private const val ATTR_ID_AUTHORITIES: Long = 0x01010018L
     private const val ATTR_ID_EXPORTED: Long = 0x01010010L
+    private const val ATTR_ID_TARGET_SDK_VERSION: Long = 0x01010270L
 
     /**
      * Inserts a `<provider>` element inside `<application>` with the supplied
@@ -104,6 +105,89 @@ object ManifestPatcher {
         doc.nodes.add(appEndIdx, providerEnd)
         doc.nodes.add(appEndIdx, providerStart)
 
+        return AxmlWriter.serialize(doc)
+    }
+
+    /**
+     * Ensures `<uses-sdk android:targetSdkVersion>` is at least [minTargetSdk].
+     * Android 14+ refuses to install APKs targeting too-old SDKs. Bumps existing
+     * value or inserts a new `<uses-sdk>` child of `<manifest>` if missing.
+     */
+    fun bumpTargetSdk(originalManifest: ByteArray, minTargetSdk: Int): ByteArray {
+        val doc = AxmlReader.parse(originalManifest)
+        val sp = doc.stringPool
+        val rm = doc.resourceMap
+        val androidNsIdx = sp.indexOf(ANDROID_NS_URI).takeIf { it >= 0 }
+            ?: ensureString(sp, ANDROID_NS_URI)
+
+        val usesSdkNode = doc.nodes.firstOrNull {
+            it is AxmlNode.StartElement && sp.get(it.name) == "uses-sdk"
+        } as? AxmlNode.StartElement
+
+        if (usesSdkNode != null) {
+            val existing = usesSdkNode.attributes.firstOrNull { a ->
+                a.ns == androidNsIdx && sp.get(a.name) == "targetSdkVersion"
+            }
+            if (existing != null) {
+                val current = existing.typedValue.data.toInt()
+                if (current < minTargetSdk) {
+                    existing.rawValue = NULL_STRING_INDEX
+                    existing.typedValue = ResValue(
+                        dataType = ResValueType.INT_DEC,
+                        data = minTargetSdk.toLong()
+                    )
+                }
+            } else {
+                val nameIdx = ensureAttributeName(sp, rm, "targetSdkVersion", ATTR_ID_TARGET_SDK_VERSION)
+                usesSdkNode.attributes.add(
+                    AxmlAttribute(
+                        ns = androidNsIdx,
+                        name = nameIdx,
+                        rawValue = NULL_STRING_INDEX,
+                        typedValue = ResValue(
+                            dataType = ResValueType.INT_DEC,
+                            data = minTargetSdk.toLong()
+                        )
+                    )
+                )
+            }
+            return AxmlWriter.serialize(doc)
+        }
+
+        // No <uses-sdk> at all - inject one as the first child of <manifest>.
+        val manifestStartIdx = doc.nodes.indexOfFirst {
+            it is AxmlNode.StartElement && sp.get(it.name) == "manifest"
+        }
+        require(manifestStartIdx >= 0) { "no <manifest> element" }
+
+        val usesSdkNameIdx = ensureString(sp, "uses-sdk")
+        val targetAttrIdx = ensureAttributeName(sp, rm, "targetSdkVersion", ATTR_ID_TARGET_SDK_VERSION)
+
+        val refLine = (doc.nodes[manifestStartIdx] as AxmlNode.StartElement).lineNumber
+        val start = AxmlNode.StartElement(
+            lineNumber = refLine,
+            comment = -1,
+            ns = NULL_STRING_INDEX,
+            name = usesSdkNameIdx,
+            idIndex = 0, classIndex = 0, styleIndex = 0,
+            attributes = mutableListOf(
+                AxmlAttribute(
+                    ns = androidNsIdx,
+                    name = targetAttrIdx,
+                    rawValue = NULL_STRING_INDEX,
+                    typedValue = ResValue(
+                        dataType = ResValueType.INT_DEC,
+                        data = minTargetSdk.toLong()
+                    )
+                )
+            )
+        )
+        val end = AxmlNode.EndElement(
+            lineNumber = refLine, comment = -1,
+            ns = NULL_STRING_INDEX, name = usesSdkNameIdx
+        )
+        doc.nodes.add(manifestStartIdx + 1, start)
+        doc.nodes.add(manifestStartIdx + 2, end)
         return AxmlWriter.serialize(doc)
     }
 
