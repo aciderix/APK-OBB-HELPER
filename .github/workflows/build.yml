@@ -3,10 +3,11 @@ name: Build APK
 on:
   push:
     branches: ["**"]
+    tags: ["v*"]
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build:
@@ -27,19 +28,53 @@ jobs:
       - name: Build debug APK
         run: gradle :app:assembleDebug --no-daemon --stacktrace
 
-      - name: Build release APK (debug-signed)
+      - name: Build release APK
         run: gradle :app:assembleRelease --no-daemon --stacktrace
 
-      - name: Upload debug APK
+      - name: Upload debug APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: ObbInstaller-debug
           path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
 
-      - name: Upload release APK
+      - name: Upload release APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: ObbInstaller-release
           path: app/build/outputs/apk/release/*.apk
           if-no-files-found: error
+
+      - name: Stage release APK
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          mkdir -p release-assets
+          cp app/build/outputs/apk/release/app-release.apk \
+             "release-assets/ObbInstaller-${GITHUB_REF_NAME}.apk"
+          cp app/build/outputs/apk/debug/app-debug.apk \
+             "release-assets/ObbInstaller-${GITHUB_REF_NAME}-debug.apk"
+          ls -la release-assets/
+
+      - name: Publish GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release-assets/*
+          generate_release_notes: true
+          draft: false
+          prerelease: false
+          name: "OBB Installer ${{ github.ref_name }}"
+          body: |
+            **APK Download**
+
+            - `ObbInstaller-${{ github.ref_name }}.apk` — release build (recommended)
+            - `ObbInstaller-${{ github.ref_name }}-debug.apk` — debug build (faster startup, has debugging symbols)
+
+            **Install instructions**
+
+            1. Download the APK above.
+            2. Open it on your Android 11+ device.
+            3. Allow "install unknown apps" if Android prompts you.
+            4. Open the app, pick a game APK + OBB, tap *Install*.
+
+            See the [README](https://github.com/aciderix/Claude-code-com#readme) for full documentation.
