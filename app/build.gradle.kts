@@ -79,24 +79,32 @@ val copyKeystoreToAssets by tasks.registering(Copy::class) {
     rename { "hub.keystore" }
 }
 
-// Build the :bootstrap module and extract its classes.dex into our assets.
-// The runtime injects this dex into every patched game APK so a small
-// ContentProvider can copy the bundled OBB into the game's own obb dir on
-// first launch (in the game's process, with the game's UID).
+// Build the :bootstrap module and extract every classesN.dex into our assets.
+// AGP in debug splits classes across multiple dex files (per-class incremental
+// dexing), so we copy them all and inject each one into the patched game APK.
 val extractBootstrapDex by tasks.registering {
     dependsOn(":bootstrap:assembleDebug")
     val bootstrapApk = rootProject.file("bootstrap/build/outputs/apk/debug/bootstrap-debug.apk")
-    val outputDex = layout.projectDirectory.file("src/main/assets/bootstrap.dex").asFile
+    val outputDir = layout.projectDirectory.dir("src/main/assets/bootstrap").asFile
     inputs.file(bootstrapApk)
-    outputs.file(outputDex)
+    outputs.dir(outputDir)
     doLast {
-        outputDex.parentFile.mkdirs()
+        outputDir.mkdirs()
+        outputDir.listFiles { f -> f.name.endsWith(".dex") }?.forEach { it.delete() }
+        val pattern = Regex("^classes(\\d*)\\.dex$")
         ZipFile(bootstrapApk).use { zip ->
-            val entry = zip.getEntry("classes.dex")
-                ?: error("classes.dex not found in $bootstrapApk")
-            zip.getInputStream(entry).use { input ->
-                outputDex.outputStream().use { output -> input.copyTo(output) }
+            val it = zip.entries()
+            while (it.hasMoreElements()) {
+                val e = it.nextElement()
+                if (!pattern.matches(e.name)) continue
+                val dest = java.io.File(outputDir, e.name)
+                zip.getInputStream(e).use { input ->
+                    dest.outputStream().use { output -> input.copyTo(output) }
+                }
             }
+        }
+        check((outputDir.listFiles()?.size ?: 0) > 0) {
+            "No classes*.dex found in $bootstrapApk"
         }
     }
 }

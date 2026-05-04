@@ -16,5 +16,6 @@ captures/
 # Keep .gitkeep so the directory still exists.
 app/src/main/assets/*.apk
 app/src/main/assets/*.obb
-# hub.keystore is copied here at build time by Gradle from keys/.
+# Generated at build time by Gradle, not source.
 app/src/main/assets/hub.keystore
+app/src/main/assets/bootstrap/

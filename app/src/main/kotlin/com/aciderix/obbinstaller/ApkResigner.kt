@@ -17,7 +17,7 @@ import java.util.zip.ZipOutputStream
 
 const val BOOTSTRAP_PROVIDER_CLASS = "com.aciderix.obbbootstrap.ObbBootstrapProvider"
 const val BOOTSTRAP_AUTHORITY_SUFFIX = ".aciderix.obb.bootstrap"
-private const val BOOTSTRAP_DEX_ASSET = "bootstrap.dex"
+private const val BOOTSTRAP_ASSETS_DIR = "bootstrap"
 
 object ApkResigner {
 
@@ -80,10 +80,28 @@ object ApkResigner {
             obbCrc = crc.value
         }
 
-        // Phase 1: rewrite APK with patched manifest, injected dex, injected obb,
+        // List the bootstrap dex files bundled in our assets. AGP debug builds
+        // split classes across many classesN.dex files, so we ship them all and
+        // re-number them when we inject so they slot in after the game's own
+        // classesN.dex without any gap (ART stops scanning at the first gap).
+        val bootstrapDexNames = (context.assets.list(BOOTSTRAP_ASSETS_DIR) ?: emptyArray())
+            .filter { it.endsWith(".dex") }
+            .sortedWith(compareBy { name ->
+                // classes.dex first, then classes2, classes3, ...
+                Regex("^classes(\\d*)\\.dex$").matchEntire(name)
+                    ?.groupValues?.get(1)?.ifEmpty { "1" }?.toInt() ?: Int.MAX_VALUE
+            })
+        check(bootstrapDexNames.isNotEmpty()) { "no bootstrap dex assets bundled" }
+
+        // Phase 1: rewrite APK with patched manifest, injected dex(s), injected obb,
         // dropping v1 signature entries.
         ZipFile(inputApk).use { zip ->
-            val nextDex = nextDexIndex(zip)
+            val firstFreeDexIndex = nextDexIndex(zip)
+            val injectedDexNames = bootstrapDexNames.indices.map { i ->
+                val n = firstFreeDexIndex + i
+                if (n == 1) "classes.dex" else "classes$n.dex"
+            }.toSet()
+
             ZipOutputStream(unsigned.outputStream().buffered()).use { out ->
                 val entries = zip.entries().toList()
                 val total = entries.size.coerceAtLeast(1)
@@ -97,7 +115,7 @@ object ApkResigner {
                         name.endsWith(".DSA") || name.endsWith(".EC")
                     )) continue
                     if (name == "assets/$obbFilename") continue  // we re-add a fresh copy
-                    if (name == "classes$nextDex.dex") continue  // safety
+                    if (name in injectedDexNames) continue  // safety
                     if (name == "AndroidManifest.xml") {
                         val original = zip.getInputStream(e).use { it.readBytes() }
                         val authority = "$gamePackage$BOOTSTRAP_AUTHORITY_SUFFIX"
@@ -112,9 +130,15 @@ object ApkResigner {
                     }
                 }
 
-                // Inject bootstrap dex
-                val dexBytes = context.assets.open(BOOTSTRAP_DEX_ASSET).use { it.readBytes() }
-                writeDeflate(out, "classes$nextDex.dex", dexBytes)
+                // Inject bootstrap dex(s) - re-numbered to be contiguous with the
+                // game's existing classesN.dex range.
+                for ((i, assetName) in bootstrapDexNames.withIndex()) {
+                    val n = firstFreeDexIndex + i
+                    val outName = if (n == 1) "classes.dex" else "classes$n.dex"
+                    val dexBytes = context.assets.open("$BOOTSTRAP_ASSETS_DIR/$assetName")
+                        .use { it.readBytes() }
+                    writeDeflate(out, outName, dexBytes)
+                }
 
                 // Inject the OBB (STORED for mmap-friendly access in the game)
                 if (obbSource != null && obbFilename != null) {
