@@ -1,4 +1,71 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">OBB Installer</string>
+
+    <!-- Bottom navigation -->
+    <string name="tab_home">Home</string>
+    <string name="tab_about">About</string>
+    <string name="tab_help">Help</string>
+
+    <!-- Cards -->
+    <string name="card_apk">APK</string>
+    <string name="card_obb">OBB (optional)</string>
+    <string name="no_file_selected">No file selected</string>
+    <string name="bundled_label">Bundled · %1$s</string>
+    <string name="selected_label">Selected · %1$s</string>
+    <string name="pick_file">Choose a file</string>
+    <string name="change_file">Change</string>
+    <string name="format_apk">Supported · .apk</string>
+    <string name="format_obb">Supported · .obb</string>
+
+    <!-- Install button -->
+    <string name="install_apk">Install APK</string>
+    <string name="install_apk_obb">Install APK + OBB</string>
+    <string name="install_subtitle">The OBB is injected at first launch</string>
+
+    <!-- Phases -->
+    <string name="phase_staging">Reading the APK…</string>
+    <string name="phase_patching">Patching + injecting OBB…</string>
+    <string name="phase_installing">Installing %1$s…</string>
+    <string name="phase_done_with_obb">Done. Launch the game from your home screen — the first launch will take a few seconds while the OBB unpacks.</string>
+    <string name="phase_done_no_obb">APK installed.</string>
+    <string name="phase_error">Install failed: %1$s</string>
+    <string name="install_uninstall_hint">\n→ Uninstall any existing version of the game first.</string>
+    <string name="restart">Start over</string>
+
+    <!-- Permissions -->
+    <string name="unknown_sources_required">Permission needed</string>
+    <string name="unknown_sources_subtitle">Allow installing unknown apps for OBB Installer.</string>
+    <string name="open_settings">Open settings</string>
+
+    <!-- How it works -->
+    <string name="how_it_works_title">How it works</string>
+    <string name="how_it_works_body">The OBB is bundled inside the APK. A tiny invisible component injected next to the game extracts it on first launch — directly from inside the game\'s process, where every Android version allows writing to the OBB folder. No special permissions, no OEM can block this.</string>
+    <string name="caveat_title">Caveat</string>
+    <string name="caveat_body">The game is re-signed with the hub\'s key, so Play Store updates are no longer possible and any online anti-cheat will reject it. Single-player and offline games run normally.</string>
+
+    <!-- About -->
+    <string name="about_title">About</string>
+    <string name="about_intro">A standalone installer for Android games that ship as APK + OBB.</string>
+    <string name="about_features_title">What it does</string>
+    <string name="about_feature_1">Installs the APK with one tap.</string>
+    <string name="about_feature_2">Embeds the OBB inside the APK so the game finds it on its own.</string>
+    <string name="about_feature_3">Auto-bumps targetSdk on legacy games so modern Android accepts them.</string>
+    <string name="about_feature_4">Auto-patches old native libraries with text relocations (libogg, libcrypto, …).</string>
+    <string name="about_compat_title">Compatibility</string>
+    <string name="about_compat_body">Android 11+ (Xiaomi/HyperOS, OnePlus, Samsung One UI, Pixel, etc.). 90 %+ of single-player legacy games install and run.</string>
+    <string name="about_version">Version %1$s</string>
+
+    <!-- Help -->
+    <string name="help_title">FAQ</string>
+    <string name="help_q1">Where do I get the APK and OBB?</string>
+    <string name="help_a1">From your existing backup, or from a sideload archive. The hub does not download anything.</string>
+    <string name="help_q2">The game crashes on launch.</string>
+    <string name="help_a2">A small fraction of legacy games verify their own signature in code and refuse to run after re-signing. Most online competitive games will also reject the patched signature. There is no fix for those at the hub level.</string>
+    <string name="help_q3">First launch is slow / black screen.</string>
+    <string name="help_a3">Normal. The injected component is unpacking the OBB into the game\'s private folder. ~30 s per gigabyte. Subsequent launches are instant.</string>
+    <string name="help_q4">Will it update from Play Store?</string>
+    <string name="help_a4">No. Re-signed packages cannot be updated from Play Store. Reinstall through the hub when a new version is available.</string>
+    <string name="help_q5">Is anything sent online?</string>
+    <string name="help_a5">No. Everything happens on-device.</string>
 </resources>

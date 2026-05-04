@@ -91,7 +91,14 @@ class InstallerViewModel(app: Application) : AndroidViewModel(app) {
             try {
                 val ctx = getApplication<Application>()
 
-                _state.update { it.copy(phase = Phase.Staging, progress = 0f, statusText = "Lecture de l'APK…", errorText = null) }
+                _state.update {
+                    it.copy(
+                        phase = Phase.Staging,
+                        progress = 0f,
+                        statusText = ctx.getString(R.string.phase_staging),
+                        errorText = null
+                    )
+                }
                 val meta = ApkInstaller.stageAndReadMeta(ctx, apk) { p ->
                     _state.update { it.copy(progress = p) }
                 }
@@ -101,7 +108,7 @@ class InstallerViewModel(app: Application) : AndroidViewModel(app) {
                     it.copy(
                         phase = Phase.Patching,
                         progress = 0f,
-                        statusText = "Patch + injection OBB + signature de ${meta.packageName}…"
+                        statusText = ctx.getString(R.string.phase_patching)
                     )
                 }
                 val obbFilename = s.obb?.displayName?.takeIf { it.isNotBlank() }
@@ -121,7 +128,7 @@ class InstallerViewModel(app: Application) : AndroidViewModel(app) {
                     it.copy(
                         phase = Phase.InstallingApk,
                         progress = 0f,
-                        statusText = "Installation de ${meta.packageName} (v${meta.versionName})…"
+                        statusText = ctx.getString(R.string.phase_installing, meta.packageName)
                     )
                 }
                 val result = ApkInstaller.install(ctx, patchedMeta) { p ->
@@ -130,21 +137,26 @@ class InstallerViewModel(app: Application) : AndroidViewModel(app) {
                 when (result) {
                     is InstallResult.Success -> {
                         val msg = if (s.obb != null)
-                            "Installation OK. Premier lancement du jeu : ~30 s pour extraire l'OBB, puis tout est normal."
+                            ctx.getString(R.string.phase_done_with_obb)
                         else
-                            "APK installée."
+                            ctx.getString(R.string.phase_done_no_obb)
                         _state.update { it.copy(phase = Phase.Done, statusText = msg) }
                     }
                     is InstallResult.Failure -> {
                         val hint = if (result.message.contains("INCOMPATIBLE", ignoreCase = true) ||
                                        result.message.contains("conflict", ignoreCase = true)) {
-                            "\n→ Désinstalle d'abord toute version existante du jeu."
+                            ctx.getString(R.string.install_uninstall_hint)
                         } else ""
-                        _state.update { it.copy(phase = Phase.Error, errorText = "Échec installation : ${result.message}$hint") }
+                        _state.update {
+                            it.copy(
+                                phase = Phase.Error,
+                                errorText = ctx.getString(R.string.phase_error, result.message) + hint
+                            )
+                        }
                     }
                 }
             } catch (t: Throwable) {
-                _state.update { it.copy(phase = Phase.Error, errorText = t.message ?: "erreur inconnue") }
+                _state.update { it.copy(phase = Phase.Error, errorText = t.message ?: "unknown error") }
             }
         }
     }

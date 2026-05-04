@@ -127,6 +127,7 @@ dependencies {
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-tooling-preview")
     implementation("androidx.compose.material3:material3")
+    implementation("androidx.compose.material:material-icons-extended")
 
     // APK re-signing: Google's official apksig library, runs on-device.
     // (Android already bundles BouncyCastle in the framework, so we don't pull bcprov.)
