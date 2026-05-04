@@ -1,0 +1,7 @@
+Première version publique.
+
+• Pipeline d'install APK + OBB en un tap.
+• Patch auto pour les vieux jeux : bump du targetSdkVersion, correctif ELF text relocations.
+• Interface Compose avec animations en cascade, thème sombre/néon, navigation par onglets.
+• Bilingue EN/FR, suit la locale système.
+• Testé Android 11 à 16 sur Pixel, Samsung, Xiaomi/HyperOS, OnePlus.

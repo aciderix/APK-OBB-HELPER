@@ -1,0 +1,7 @@
+First public release.
+
+• Single-tap APK + OBB install pipeline.
+• Auto-fix for legacy games: targetSdkVersion bump, ELF text relocation patching.
+• Compose UI with stagger animations, dark/neon theme, bottom navigation.
+• Bilingual EN/FR, follows the system locale.
+• Tested on Android 11 to 16 across Pixel, Samsung, Xiaomi/HyperOS, OnePlus.

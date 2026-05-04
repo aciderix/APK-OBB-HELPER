@@ -1,0 +1,45 @@
+OBB Installer est une petite app Android autonome qui installe en un tap les jeux livrés sous forme APK + OBB, sur n'importe quel device Android moderne. Pas de mode développeur, pas de PC, pas de Shizuku, pas de root.
+
+Elle résout le problème le plus pénible du sideload sur Android 11+ :
+
+« Pourquoi mon explorateur de fichiers ne peut plus copier l'OBB dans Android/obb/<package>/ ? »
+
+Parce que Google a verrouillé ce chemin pour les apps tierces. OBB Installer prend une route complètement différente : elle ne copie jamais l'OBB elle-même. À la place, elle l'embarque dans l'APK patchée et laisse le jeu lui-même la déballer au premier lancement, depuis son propre processus où Android autorise toujours l'écriture dans le dossier OBB.
+
+Un tap. APK + OBB en entrée. Le jeu trouve ses données et démarre.
+
+== Fonctionnalités ==
+
+• Install en un tap — choisis un APK et un OBB, tape Installer, fini.
+• Autonome — pas de Shizuku, pas d'ADB, pas de PC, pas d'options développeur.
+• Compatibilité universelle — Android 11 à 16, Pixel, Samsung One UI, Xiaomi/HyperOS/MIUI, OnePlus, Nothing, Asus.
+• Patch automatique des vieux jeux — bump du targetSdkVersion pour passer la vérif d'install, patch des vieilles libs natives à text relocations (libogg, libcrypto, etc.) pour qu'elles chargent sur Android 7+.
+• Interface bilingue — anglais et français, suit la locale système.
+• Hors-ligne — rien ne part en ligne, pas de télémétrie, pas de pub.
+• Compose moderne avec animations en cascade et navigation à trois onglets.
+
+== Comment ça marche ==
+
+Quand tu tapes Installer, l'app :
+1. Patche le manifest binaire du jeu (bump du targetSdkVersion, injection d'un mini ContentProvider).
+2. Injecte un petit classes.dex contenant ce ContentProvider.
+3. Embarque l'OBB comme asset dans l'APK patchée.
+4. Patche les vieilles libs .so qui ont besoin de text relocations.
+5. Re-signe le tout avec la clé du hub.
+6. Passe l'APK patchée au PackageInstaller d'Android.
+
+Quand tu lances le jeu la première fois, le ContentProvider injecté tourne dans le processus du jeu et copie l'OBB depuis ses propres assets vers le dossier Android/obb privé du jeu. Du point de vue de l'OS, c'est le jeu qui écrit ses propres données — ce qui est toujours autorisé. Le jeu trouve son OBB et démarre.
+
+== Conséquences ==
+
+Le jeu est re-signé avec la clé du hub, donc :
+- Plus de mises à jour Play Store pour les jeux installés.
+- Les jeux compétitifs en ligne refuseront la signature patchée (anti-cheat).
+- Une poignée de jeux qui vérifient leur propre signature dans leur code refuseront de tourner.
+
+Les jeux solo et hors-ligne tournent normalement.
+
+== Code source ==
+
+100% open source sous licence MIT :
+https://github.com/aciderix/APK-OBB-HELPER

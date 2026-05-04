@@ -1,0 +1,45 @@
+OBB Installer is a tiny standalone Android app that installs games shipped as APK + OBB in a single tap, on any modern Android device. No developer mode, no PC, no Shizuku, no root.
+
+It solves the most annoying part of sideloading on Android 11+:
+
+"Why can't my file manager copy the OBB into Android/obb/<package>/ anymore?"
+
+Because Google locked that path against third-party apps. So OBB Installer takes a different route entirely: it never copies the OBB itself. Instead, it embeds the OBB inside the patched APK and lets the game itself unpack it on first launch, from inside the game's own process where Android still allows writing to the OBB folder.
+
+One tap. APK + OBB go in. The game finds its data and runs.
+
+== Features ==
+
+• Single-tap install — pick an APK and an OBB, hit Install, done.
+• Self-contained — no Shizuku, no ADB, no PC, no developer options.
+• Universal compatibility — works on Android 11 to 16, Pixel, Samsung One UI, Xiaomi/HyperOS/MIUI, OnePlus, Nothing, Asus.
+• Auto-fixes legacy games — bumps targetSdkVersion so the install passes on modern Android, patches old native libraries with text relocations (libogg, libcrypto, etc.) so they load on Android 7+.
+• Bilingual UI — English and French, follows the system locale.
+• Offline-first — nothing is sent online, no telemetry, no ads.
+• Modern Compose UI with stagger animations and three-tab navigation.
+
+== How it works ==
+
+When you tap Install, the app:
+1. Patches the binary AndroidManifest.xml of the game (bumps targetSdkVersion, injects a tiny ContentProvider).
+2. Injects a small classes.dex containing that ContentProvider.
+3. Embeds the OBB as an asset inside the patched APK.
+4. Patches every legacy .so library that needs text relocations.
+5. Re-signs the result with the hub key.
+6. Hands the patched APK to Android's PackageInstaller.
+
+When you launch the game for the first time, the injected ContentProvider runs inside the game's own process and copies the OBB asset into the game's private Android/obb folder. From the OS point of view, the game is writing its own data — which is always allowed. The game then finds its OBB and runs.
+
+== Tradeoffs ==
+
+The game is re-signed with the hub key, so:
+- Play Store updates are no longer possible for installed games.
+- Online competitive games and live-service titles will reject the patched signature (anti-cheat).
+- A small fraction of games verify their own signature in code and refuse to run.
+
+Single-player and offline games run normally.
+
+== Source code ==
+
+100% open source under MIT license:
+https://github.com/aciderix/APK-OBB-HELPER
