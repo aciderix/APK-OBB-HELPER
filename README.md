@@ -20,7 +20,7 @@
 ---
 
 <p align="center">
-  <em>Screenshot coming soon — expect a polished dark / neon-teal install screen with stagger animations.</em>
+  <img src="screen.jpg" alt="OBB Installer home screen" width="320" />
 </p>
 
 ---
