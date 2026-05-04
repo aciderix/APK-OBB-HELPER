@@ -17,7 +17,6 @@ enum class Phase {
     Staging,
     Patching,
     InstallingApk,
-    CopyingObb,
     Done,
     Error
 }
@@ -90,8 +89,9 @@ class InstallerViewModel(app: Application) : AndroidViewModel(app) {
         val apk = s.apk ?: return
         viewModelScope.launch {
             try {
-                _state.update { it.copy(phase = Phase.Staging, progress = 0f, statusText = "Lecture de l'APK…", errorText = null) }
                 val ctx = getApplication<Application>()
+
+                _state.update { it.copy(phase = Phase.Staging, progress = 0f, statusText = "Lecture de l'APK…", errorText = null) }
                 val meta = ApkInstaller.stageAndReadMeta(ctx, apk) { p ->
                     _state.update { it.copy(progress = p) }
                 }
@@ -101,10 +101,18 @@ class InstallerViewModel(app: Application) : AndroidViewModel(app) {
                     it.copy(
                         phase = Phase.Patching,
                         progress = 0f,
-                        statusText = "Patch + signature de ${meta.packageName}…"
+                        statusText = "Patch + injection OBB + signature de ${meta.packageName}…"
                     )
                 }
-                val patched = ApkResigner.patchAndResign(ctx, meta.cacheFile) { p ->
+                val obbFilename = s.obb?.displayName?.takeIf { it.isNotBlank() }
+                    ?: ("main.${meta.versionCode}.${meta.packageName}.obb".takeIf { s.obb != null })
+                val patched = ApkResigner.patchAndResign(
+                    context = ctx,
+                    inputApk = meta.cacheFile,
+                    gamePackage = meta.packageName,
+                    obbSource = s.obb,
+                    obbFilename = obbFilename
+                ) { p ->
                     _state.update { it.copy(progress = p) }
                 }
                 val patchedMeta = meta.copy(cacheFile = patched)
@@ -121,34 +129,16 @@ class InstallerViewModel(app: Application) : AndroidViewModel(app) {
                 }
                 when (result) {
                     is InstallResult.Success -> {
-                        if (s.obb != null) {
-                            _state.update {
-                                it.copy(
-                                    phase = Phase.CopyingObb,
-                                    progress = 0f,
-                                    statusText = "Copie de l'OBB dans Android/obb/${meta.packageName}…"
-                                )
-                            }
-                            val filename = s.obb.displayName.ifBlank { "main.${meta.versionCode}.${meta.packageName}.obb" }
-                            val r = ObbCopier.copy(ctx, s.obb, meta.packageName, filename) { p ->
-                                _state.update { it.copy(progress = p) }
-                            }
-                            if (r.isSuccess) {
-                                _state.update { it.copy(phase = Phase.Done, statusText = "Terminé. Lance le jeu.") }
-                            } else {
-                                _state.update {
-                                    it.copy(phase = Phase.Error,
-                                        errorText = "Échec copie OBB : ${r.exceptionOrNull()?.message}")
-                                }
-                            }
-                        } else {
-                            _state.update { it.copy(phase = Phase.Done, statusText = "APK installée.") }
-                        }
+                        val msg = if (s.obb != null)
+                            "Installation OK. Premier lancement du jeu : ~30 s pour extraire l'OBB, puis tout est normal."
+                        else
+                            "APK installée."
+                        _state.update { it.copy(phase = Phase.Done, statusText = msg) }
                     }
                     is InstallResult.Failure -> {
                         val hint = if (result.message.contains("INCOMPATIBLE", ignoreCase = true) ||
                                        result.message.contains("conflict", ignoreCase = true)) {
-                            "\n→ Désinstalle d'abord toute version existante du jeu (Play Store ou autre) et réessaie."
+                            "\n→ Désinstalle d'abord toute version existante du jeu."
                         } else ""
                         _state.update { it.copy(phase = Phase.Error, errorText = "Échec installation : ${result.message}$hint") }
                     }

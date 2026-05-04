@@ -111,14 +111,13 @@ fun InstallerScreen(vm: InstallerViewModel = viewModel()) {
                         Phase.Idle, Phase.Done, Phase.Error ->
                             if (state.obb == null) "Installer l'APK" else "Installer APK + OBB"
                         Phase.Staging -> "Préparation…"
-                        Phase.Patching -> "Patch + signature…"
+                        Phase.Patching -> "Patch + injection OBB…"
                         Phase.InstallingApk -> "Installation…"
-                        Phase.CopyingObb -> "Copie OBB…"
                     }
                 )
             }
 
-            if (state.phase in setOf(Phase.Staging, Phase.Patching, Phase.InstallingApk, Phase.CopyingObb)) {
+            if (state.phase in setOf(Phase.Staging, Phase.Patching, Phase.InstallingApk)) {
                 LinearProgressIndicator(
                     progress = { state.progress.coerceIn(0f, 1f) },
                     modifier = Modifier.fillMaxWidth()
@@ -143,10 +142,11 @@ fun InstallerScreen(vm: InstallerViewModel = viewModel()) {
                 Column(modifier = Modifier.padding(12.dp)) {
                     Text("Comment ça marche", fontWeight = FontWeight.Bold, fontSize = 13.sp)
                     Text(
-                        "L'app ré-écrit l'APK pour partager un UID Linux avec ce hub, ce qui lui " +
-                        "permet d'écrire dans Android/obb/<package> sans SAF, sans Shizuku, sans root. " +
-                        "Conséquence : la signature du jeu change, donc plus de mises à jour Play Store " +
-                        "et anti-cheat en ligne KO. Pour les jeux solo, c'est transparent.",
+                        "L'OBB est embarquée DANS l'APK et un mini ContentProvider injecté la copie " +
+                        "vers Android/obb/<package> au premier lancement du jeu, depuis le processus " +
+                        "du jeu (qui en a tous les droits). Aucune permission spéciale, aucun Shizuku, " +
+                        "aucun OEM ne peut bloquer ça. Conséquence : la signature du jeu change, " +
+                        "donc plus de mises à jour Play Store et anti-cheat en ligne KO.",
                         fontSize = 12.sp,
                         color = Color(0xFFAAAAAA)
                     )

@@ -6,14 +6,18 @@ import com.android.apksig.ApkSigner
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.io.OutputStream
 import java.security.KeyStore
 import java.security.PrivateKey
 import java.security.cert.X509Certificate
+import java.util.zip.CRC32
 import java.util.zip.ZipEntry
 import java.util.zip.ZipFile
 import java.util.zip.ZipOutputStream
 
-const val SHARED_UID = "com.aciderix.hub.shared"
+const val BOOTSTRAP_PROVIDER_CLASS = "com.aciderix.obbbootstrap.ObbBootstrapProvider"
+const val BOOTSTRAP_AUTHORITY_SUFFIX = ".aciderix.obb.bootstrap"
+private const val BOOTSTRAP_DEX_ASSET = "bootstrap.dex"
 
 object ApkResigner {
 
@@ -22,7 +26,6 @@ object ApkResigner {
     private const val KEY_PASSWORD = "obbinstaller"
 
     private fun loadKeyMaterial(context: Context): Pair<PrivateKey, X509Certificate> {
-        // keytool default since JDK 9 is PKCS12
         val ks = KeyStore.getInstance("PKCS12")
         context.assets.open(KEYSTORE_ASSET).use { ks.load(it, KEY_PASSWORD.toCharArray()) }
         val key = ks.getKey(KEY_ALIAS, KEY_PASSWORD.toCharArray()) as PrivateKey
@@ -31,64 +34,106 @@ object ApkResigner {
     }
 
     /**
-     * Reads the input APK, patches its AndroidManifest.xml to add android:sharedUserId,
-     * strips any existing v1 signatures, and re-signs the result with the hub key.
-     * Returns the path to the signed output APK.
+     * Patches the input APK to:
+     * - inject a `<provider>` element for [BOOTSTRAP_PROVIDER_CLASS],
+     * - inject our compiled bootstrap dex as the next available `classesN.dex`,
+     * - bundle the OBB (if any) inside `assets/<obbFilename>` so the bootstrap
+     *   provider can copy it into the game's own obb dir on first launch.
+     *
+     * Then re-signs the result with the hub keystore.
      */
     suspend fun patchAndResign(
         context: Context,
         inputApk: File,
-        sharedUserId: String = SHARED_UID,
+        gamePackage: String,
+        obbSource: FileSource?,
+        obbFilename: String?,
         onProgress: (Float) -> Unit
     ): File = withContext(Dispatchers.IO) {
         val unsigned = File(context.cacheDir, "patched-unsigned.apk")
         val signed = File(context.cacheDir, "patched-signed.apk")
-        if (unsigned.exists()) unsigned.delete()
-        if (signed.exists()) signed.delete()
+        val stagedObb = File(context.cacheDir, "staged.obb")
+        listOf(unsigned, signed, stagedObb).forEach { if (it.exists()) it.delete() }
 
-        // Phase 1: rewrite ZIP with patched manifest, dropping v1 signature entries.
+        // Stage OBB once to cache, computing CRC and length so we can write it
+        // as a STORED zip entry (mmap-friendly inside the patched APK, single pass).
+        var obbBytes = 0L
+        var obbCrc = 0L
+        if (obbSource != null) {
+            val total = obbSource.length(context).coerceAtLeast(1L)
+            val crc = CRC32()
+            obbSource.openStream(context).use { input ->
+                stagedObb.outputStream().buffered().use { output ->
+                    val buf = ByteArray(512 * 1024)
+                    var n: Int
+                    var written = 0L
+                    while (input.read(buf).also { n = it } > 0) {
+                        crc.update(buf, 0, n)
+                        output.write(buf, 0, n)
+                        written += n
+                        obbBytes = written
+                        onProgress(0.30f * (written.toFloat() / total).coerceIn(0f, 1f))
+                    }
+                    output.flush()
+                }
+            }
+            obbCrc = crc.value
+        }
+
+        // Phase 1: rewrite APK with patched manifest, injected dex, injected obb,
+        // dropping v1 signature entries.
         ZipFile(inputApk).use { zip ->
+            val nextDex = nextDexIndex(zip)
             ZipOutputStream(unsigned.outputStream().buffered()).use { out ->
                 val entries = zip.entries().toList()
                 val total = entries.size.coerceAtLeast(1)
                 for ((i, e) in entries.withIndex()) {
-                    onProgress(0.45f * i / total)
-                    val name = e.name
+                    onProgress(0.30f + 0.30f * i / total)
                     if (e.isDirectory) continue
+                    val name = e.name
                     if (name.startsWith("META-INF/") && (
                         name == "META-INF/MANIFEST.MF" ||
                         name.endsWith(".SF") || name.endsWith(".RSA") ||
                         name.endsWith(".DSA") || name.endsWith(".EC")
                     )) continue
-
-                    val isManifest = name == "AndroidManifest.xml"
-                    val newEntry = ZipEntry(name)
-                    if (isManifest) {
-                        // Always re-deflate the patched manifest
-                        newEntry.method = ZipEntry.DEFLATED
-                    } else {
-                        newEntry.method = e.method
-                        if (e.method == ZipEntry.STORED) {
-                            newEntry.size = e.size
-                            newEntry.crc = e.crc
-                            newEntry.compressedSize = e.compressedSize
-                        }
-                    }
-                    out.putNextEntry(newEntry)
-                    if (isManifest) {
+                    if (name == "assets/$obbFilename") continue  // we re-add a fresh copy
+                    if (name == "classes$nextDex.dex") continue  // safety
+                    if (name == "AndroidManifest.xml") {
                         val original = zip.getInputStream(e).use { it.readBytes() }
-                        val patched = ManifestPatcher.addSharedUserId(original, sharedUserId)
-                        out.write(patched)
+                        val authority = "$gamePackage$BOOTSTRAP_AUTHORITY_SUFFIX"
+                        val patched = ManifestPatcher.addBootstrapProvider(
+                            originalManifest = original,
+                            providerClass = BOOTSTRAP_PROVIDER_CLASS,
+                            authority = authority
+                        )
+                        writeDeflate(out, "AndroidManifest.xml", patched)
                     } else {
-                        zip.getInputStream(e).use { it.copyTo(out) }
+                        copyEntry(zip, e, out)
                     }
+                }
+
+                // Inject bootstrap dex
+                val dexBytes = context.assets.open(BOOTSTRAP_DEX_ASSET).use { it.readBytes() }
+                writeDeflate(out, "classes$nextDex.dex", dexBytes)
+
+                // Inject the OBB (STORED for mmap-friendly access in the game)
+                if (obbSource != null && obbFilename != null) {
+                    val obbEntry = ZipEntry("assets/$obbFilename")
+                    obbEntry.method = ZipEntry.STORED
+                    obbEntry.size = obbBytes
+                    obbEntry.compressedSize = obbBytes
+                    obbEntry.crc = obbCrc
+                    out.putNextEntry(obbEntry)
+                    stagedObb.inputStream().buffered().use { it.copyTo(out) }
                     out.closeEntry()
                 }
             }
         }
-        onProgress(0.5f)
+        if (stagedObb.exists()) stagedObb.delete()
 
-        // Phase 2: sign with apksig (v1+v2+v3).
+        onProgress(0.65f)
+
+        // Phase 2: sign with apksig (v1 + v2 + v3).
         val (key, cert) = loadKeyMaterial(context)
         val signerConfig = ApkSigner.SignerConfig.Builder(KEY_ALIAS, key, listOf(cert)).build()
         ApkSigner.Builder(listOf(signerConfig))
@@ -105,5 +150,38 @@ object ApkResigner {
         unsigned.delete()
         onProgress(1f)
         signed
+    }
+
+    private fun copyEntry(zip: ZipFile, source: ZipEntry, out: ZipOutputStream) {
+        val newEntry = ZipEntry(source.name).apply {
+            method = source.method
+            if (method == ZipEntry.STORED) {
+                size = source.size
+                crc = source.crc
+                compressedSize = source.compressedSize
+            }
+        }
+        out.putNextEntry(newEntry)
+        zip.getInputStream(source).use { it.copyTo(out) }
+        out.closeEntry()
+    }
+
+    private fun writeDeflate(out: ZipOutputStream, name: String, bytes: ByteArray) {
+        val entry = ZipEntry(name).apply { method = ZipEntry.DEFLATED }
+        out.putNextEntry(entry)
+        out.write(bytes)
+        out.closeEntry()
+    }
+
+    private fun nextDexIndex(zip: ZipFile): Int {
+        val pattern = Regex("^classes(\\d*)\\.dex$")
+        var max = 0
+        val it = zip.entries()
+        while (it.hasMoreElements()) {
+            val m = pattern.matchEntire(it.nextElement().name) ?: continue
+            val n = m.groupValues[1].ifEmpty { "1" }.toInt()
+            if (n > max) max = n
+        }
+        return max + 1
     }
 }

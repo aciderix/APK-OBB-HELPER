@@ -22,3 +22,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "ObbInstaller"
 include(":app")
+include(":bootstrap")

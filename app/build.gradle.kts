@@ -49,7 +49,10 @@ android {
     }
 
     androidResources {
-        noCompress += listOf("apk", "obb", "keystore")
+        // The runtime re-signer reads the keystore via AssetFileDescriptor and
+        // streams the bootstrap.dex into the patched APK; both must remain
+        // uncompressed inside our APK.
+        noCompress += listOf("apk", "obb", "keystore", "dex")
     }
 
     packaging {
@@ -73,7 +76,33 @@ val copyKeystoreToAssets by tasks.registering(Copy::class) {
     into(layout.projectDirectory.dir("src/main/assets"))
     rename { "hub.keystore" }
 }
-tasks.named("preBuild") { dependsOn(copyKeystoreToAssets) }
+
+// Build the :bootstrap module and extract its classes.dex into our assets.
+// The runtime injects this dex into every patched game APK so a small
+// ContentProvider can copy the bundled OBB into the game's own obb dir on
+// first launch (in the game's process, with the game's UID).
+val extractBootstrapDex by tasks.registering {
+    dependsOn(":bootstrap:assembleDebug")
+    val bootstrapApk = rootProject.file("bootstrap/build/outputs/apk/debug/bootstrap-debug.apk")
+    val outputDex = layout.projectDirectory.file("src/main/assets/bootstrap.dex").asFile
+    inputs.file(bootstrapApk)
+    outputs.file(outputDex)
+    doLast {
+        outputDex.parentFile.mkdirs()
+        java.util.zip.ZipFile(bootstrapApk).use { zip ->
+            val entry = zip.getEntry("classes.dex")
+                ?: error("classes.dex not found in $bootstrapApk")
+            zip.getInputStream(entry).use { input ->
+                outputDex.outputStream().use { output -> input.copyTo(output) }
+            }
+        }
+    }
+}
+
+tasks.named("preBuild") {
+    dependsOn(copyKeystoreToAssets)
+    dependsOn(extractBootstrapDex)
+}
 
 dependencies {
     val composeBom = platform("androidx.compose:compose-bom:2024.10.01")
