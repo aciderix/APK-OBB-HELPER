@@ -1,3 +1,5 @@
+import java.util.zip.ZipFile
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -89,7 +91,7 @@ val extractBootstrapDex by tasks.registering {
     outputs.file(outputDex)
     doLast {
         outputDex.parentFile.mkdirs()
-        java.util.zip.ZipFile(bootstrapApk).use { zip ->
+        ZipFile(bootstrapApk).use { zip ->
             val entry = zip.getEntry("classes.dex")
                 ?: error("classes.dex not found in $bootstrapApk")
             zip.getInputStream(entry).use { input ->
