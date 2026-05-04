@@ -1,3 +1,4 @@
+import java.io.File
 import java.util.zip.ZipFile
 
 plugins {
@@ -97,7 +98,7 @@ val extractBootstrapDex by tasks.registering {
             while (it.hasMoreElements()) {
                 val e = it.nextElement()
                 if (!pattern.matches(e.name)) continue
-                val dest = java.io.File(outputDir, e.name)
+                val dest = File(outputDir, e.name)
                 zip.getInputStream(e).use { input ->
                     dest.outputStream().use { output -> input.copyTo(output) }
                 }
