@@ -128,6 +128,24 @@ object ApkResigner {
                             authority = authority
                         )
                         writeDeflate(out, "AndroidManifest.xml", patched)
+                    } else if (name.startsWith("lib/") && name.endsWith(".so")) {
+                        // Old games ship .so files with text relocations that
+                        // are rejected by the linker once targetSdk >= 24.
+                        // Patch the ELF in place (clears DT_TEXTREL, marks
+                        // executable LOAD segments as writable).
+                        val data = zip.getInputStream(e).use { it.readBytes() }
+                        ElfTextrelPatcher.patch(data)
+                        val newEntry = ZipEntry(name).apply {
+                            method = e.method
+                            if (method == ZipEntry.STORED) {
+                                size = data.size.toLong()
+                                compressedSize = data.size.toLong()
+                                crc = java.util.zip.CRC32().apply { update(data) }.value
+                            }
+                        }
+                        out.putNextEntry(newEntry)
+                        out.write(data)
+                        out.closeEntry()
                     } else {
                         copyEntry(zip, e, out)
                     }
