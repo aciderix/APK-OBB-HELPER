@@ -1,0 +1,12 @@
+# Funding sources displayed by GitHub on the repo's right sidebar.
+# Uncomment / fill the platforms you actually have an account on. GitHub
+# silently hides any line whose username doesn't match an active profile,
+# so it's safe to leave a future-self placeholder.
+
+github: [aciderix]              # GitHub Sponsors (once your application is approved)
+# patreon: aciderix
+# ko_fi: aciderix
+# buy_me_a_coffee: aciderix
+# liberapay: aciderix
+# open_collective: apkobb
+# custom: ["https://apkobb.fr"]
